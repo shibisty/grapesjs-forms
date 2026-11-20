@@ -7,6 +7,9 @@ export const FORM_TYPE = 'gjsf-form';
 export const PART_TYPE = 'gjsf-part';
 export const FORM_ATTR = 'data-gjsf-form';
 export const PART_ATTR = 'data-gjsf-part';
+/** The trait (Component settings) that edits the selected field — or, on the form, the form's settings. */
+export const SETTINGS_TRAIT = 'gjsf-settings';
+const settingsTrait = { type: SETTINGS_TRAIT, name: SETTINGS_TRAIT, changeProp: true };
 
 /** Parts of a form are made by the plugin: they are styled, not moved, removed or edited by hand. */
 const LOCKED = {
@@ -73,6 +76,8 @@ export interface FormHost {
   /** The select of the "Form" trait. */
   formOptions(): Array<{ id: string; name: string }>;
   labels: { chooseForm: () => string; editForm: () => string; noForm: () => string; missingForm: () => string };
+  /** The content of the settings trait of a form or one of its parts. */
+  settings?(target: { form: Component; formId: string; index: number | null }): HTMLElement;
   editCommand: string;
   /** A form component without a form was dropped from the "New form" block. */
   onCreate(comp: Component): void;
@@ -107,8 +112,24 @@ export class FormComponents {
 
     dc.addType(PART_TYPE, {
       isComponent: (el: HTMLElement) => (el?.getAttribute?.(PART_ATTR) ? { type: PART_TYPE } : false),
-      model: { defaults: { ...LOCKED } },
+      model: {
+        defaults: { ...LOCKED },
+        init(this: Component) {
+          (this as any).set('traits', [settingsTrait]);
+        },
+      },
     });
+    if (host.settings) {
+      (editor as any).TraitManager.addType(SETTINGS_TRAIT, {
+        noLabel: true,
+        createInput({ component }: { component: Component }) {
+          const t = self.targetOf(component);
+          return t ? host.settings!(t) : document.createElement('div');
+        },
+        onEvent() {},
+        onUpdate() {},
+      });
+    }
 
     dc.addType(FORM_TYPE, {
       isComponent: (el: HTMLElement) => (el?.tagName === 'FORM' && el.hasAttribute(FORM_ATTR) ? { type: FORM_TYPE, formId: el.getAttribute(FORM_ATTR) || '' } : false),
@@ -197,7 +218,25 @@ export class FormComponents {
     return [
       { type: 'select', name: 'formId', label: this.host.labels.chooseForm(), changeProp: true, options: this.selectOptions() },
       { type: 'button', name: 'gjsf-edit', label: false, text: this.host.labels.editForm(), full: true, command: this.host.editCommand },
+      ...(this.host.settings ? [settingsTrait] : []),
     ];
+  }
+
+  /**
+   * The form of a component and the field it belongs to: the index of its
+   * top-level part (fields come first, in order; then the honeypot, the
+   * button, the message) — `null` for the form itself.
+   */
+  targetOf(c: Component): { form: Component; formId: string; index: number | null } | null {
+    let x: any = c;
+    let top: any = null;
+    while (x && x.get?.('type') !== FORM_TYPE) {
+      top = x;
+      x = x.parent?.();
+    }
+    if (!x) return null;
+    const formId = String(x.get('formId') || '');
+    return { form: x, formId, index: top ? x.components().indexOf(top) : null };
   }
 
   private selectOptions(): Array<{ id: string; name: string }> {
@@ -277,13 +316,21 @@ export class FormComponents {
         .filter(Boolean)
         .forEach((cls) => c.addClass(cls));
       const sel = this.editor.getSelected();
-      const selId = sel && sel !== c && sel.closest?.(`[${FORM_ATTR}]`) === c ? sel.getId() : '';
+      const inside = !!sel && sel !== c && sel.closest?.(`[${FORM_ATTR}]`) === c;
+      const selId = inside ? sel!.getId() : '';
+      // Where the selected part is (child indexes): found again when its id changed (a field renamed).
+      const selPath: number[] = [];
+      for (let x: any = inside ? sel : null; x && x !== c; x = x.parent?.()) selPath.unshift(x.parent().components().indexOf(x));
       const key = c.get('gjsfKey') || randomKey();
       // One reset with the new parts: GrapesJS keeps the `#id` rules of ids that stay.
       c.components().reset(stableIds(buildChildren(form, { ...o, key }), String(key).replace(/[^\w-]/g, '')).map(toComponent) as any);
       this.ensureCss();
       if (selId) {
-        const again = this.find(c, (x) => x.getId() === selId);
+        let again: any = this.find(c, (x) => x.getId() === selId);
+        if (!again) {
+          again = c;
+          for (const i of selPath) again = again?.components().at(i);
+        }
         if (again) this.editor.select(again);
       }
     };

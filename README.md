@@ -90,6 +90,10 @@ In a field's value (above all a hidden one):
 
 Hidden fields are filled again on every submit; visible ones once (the visitor may change them).
 
+## Component settings
+
+Select a part of a form in the canvas — a label, an input, a field — and GrapesJS's **Component settings** show that field's properties (type, label, name, placeholder, help, required, options, limits, width, attributes). Select the form itself or its button for the form's settings (endpoint, button text, messages, redirect). Edits save to the form like the forms editor's (after `autosaveDelay`) and the form is rebuilt; the selected part stays selected, even when a renamed field changes its ids. **Edit the form** opens the full editor (fields, order, preview, submissions).
+
 ## Backend
 
 `openapi.yaml` describes what the plugin calls and what it expects back:

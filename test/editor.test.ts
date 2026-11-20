@@ -49,6 +49,51 @@ describe('the plugin in GrapesJS', () => {
     expect(editor.getCss()).toContain('.gjsf-input');
   });
 
+  it('Component settings: a part edits its field, the form its settings; the selection survives a rename', async () => {
+    const s = await createEditor();
+    editor = s.editor;
+    const f = await s.api.create();
+    const c = addForm(editor, f.id);
+    await tick(5);
+    const traitEl = (comp: Component): HTMLElement => {
+      const trait = (comp as any).getTrait('gjsf-settings');
+      expect(trait).toBeTruthy();
+      const View = (editor!.TraitManager as any).getType('gjsf-settings');
+      const view = new View({ model: trait, editor: (editor as any).getModel() });
+      document.body.appendChild(view.render().el);
+      return view.el as HTMLElement;
+    };
+    // the label of the 2nd field (email)
+    const emailField = c.components().at(1);
+    const label = emailField.components().at(0);
+    expect(label.getAttributes()['data-gjsf-part']).toBe('label');
+    editor.select(label);
+    const el = traitEl(label);
+    expect(el.querySelector('.gjsf-trait__title')!.textContent).toBe(f.fields[1].label);
+    const labelInput = el.querySelector<HTMLInputElement>('[data-prop="label"]')!;
+    expect(labelInput.value).toBe(f.fields[1].label);
+    labelInput.value = 'Your mail';
+    labelInput.dispatchEvent(new Event('input', { bubbles: true }));
+    await until(() => (s.api.get(f.id)?.fields[1].label === 'Your mail') && editor!.getHtml().includes('Your mail'));
+    // the name followed the label: the ids changed, the label is selected again (by its place)
+    expect(s.api.get(f.id)!.fields[1].name).toBe('your_mail');
+    const sel = editor.getSelected()!;
+    expect(sel.getAttributes()['data-gjsf-part']).toBe('label');
+    expect(sel.getEl()!.textContent).toContain('Your mail');
+    el.remove();
+    // the form: its settings
+    const fel = traitEl(c);
+    const ep = fel.querySelector<HTMLInputElement>('[data-prop="submitLabel"]')!;
+    ep.value = 'Go!';
+    ep.dispatchEvent(new Event('input', { bubbles: true }));
+    await until(() => editor!.getHtml().includes('>Go!</button>'));
+    // the button is a part after the fields: it shows the form's settings too
+    const btn = c.components().filter((x: any) => x.getAttributes()['data-gjsf-part'] === 'actions')[0];
+    const bel = traitEl(btn);
+    expect(bel.querySelector('[data-prop="submitLabel"]')).toBeTruthy();
+    [fel, bel].forEach((x) => x.remove());
+  });
+
   it('the base styles come even when the Style Manager made an empty .gjsf-form rule first', async () => {
     const s = await createEditor();
     editor = s.editor;

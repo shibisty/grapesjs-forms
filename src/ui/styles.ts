@@ -70,6 +70,18 @@ textarea.gjsf-input{resize:vertical;min-height:54px}
 .gjsf-table th,.gjsf-table td{border-bottom:1px solid rgba(255,255,255,.1);padding:5px 8px;text-align:start;vertical-align:top;max-width:280px;overflow-wrap:anywhere}
 .gjsf-table th{position:sticky;top:0;background:var(--gjs-primary-color,#444);font-weight:600}
 .gjsf-err{color:#ff8a80}
+.gjsf-trait{width:100%;padding:4px 2px 8px;box-sizing:border-box;text-align:start;font-size:12px}
+.gjsf-trait *{box-sizing:border-box}
+.gjsf-trait__head{display:flex;align-items:center;gap:6px;margin:0 0 8px}
+.gjsf-trait__title{flex:1;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gjsf-trait .gjsf-btn{padding:3px 8px;font-size:11px}
+.gjsf-trait .gjsf-pane{padding:0}
+.gjsf-trait .gjsf-grid{grid-template-columns:1fr 1fr}
+.gjs-trt-trait:has(.gjsf-trait){display:block;padding:0 10px}
+.gjs-field:has(>.gjsf-trait){background:none;padding:0;border:0;box-shadow:none}
+.gjsf-trait input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]),.gjsf-trait select,.gjsf-trait textarea{width:100%;border:1px solid rgba(255,255,255,.2);background:rgba(0,0,0,.2);color:inherit;padding:5px 8px;border-radius:3px;box-sizing:border-box;font:inherit}
+.gjsf-trait input[type=checkbox],.gjsf-trait input[type=radio]{appearance:auto;-webkit-appearance:auto;display:inline-block;width:auto;height:auto;margin:0 6px 0 0;vertical-align:middle}
+.gjsf-trait select option{color:#222}
 .gjsf-toggle{position:absolute;top:8px;right:96px;z-index:60;background:var(--gjs-primary-color,#444);color:var(--gjs-font-color,#ddd);border:1px solid rgba(255,255,255,.2);border-radius:4px;padding:6px 10px;cursor:pointer}
 `;
 

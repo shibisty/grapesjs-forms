@@ -110,6 +110,28 @@ export class FormEditor {
     this.render();
   }
 
+  /**
+   * Only the properties of one field (or, without a field, the form's
+   * settings) — for Component settings. Edits go to `change` like the
+   * editor's own.
+   */
+  embed(id: string, fieldId: string | null): HTMLElement {
+    const f = this.d.form(id);
+    this.cur = f ? clone(f) : null;
+    this.selField = fieldId;
+    const el = h('div', { class: 'gjsf-embed' });
+    this.root.replaceChildren(el);
+    if (!this.cur) return this.root;
+    if (fieldId) {
+      this.propsEl = el;
+      this.renderProps();
+    } else {
+      this.body = el;
+      this.renderSettings();
+    }
+    return this.root;
+  }
+
   get currentId(): string | null {
     return this.cur?.id || null;
   }

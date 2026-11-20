@@ -5,7 +5,7 @@ import { FormComponents, FORM_TYPE } from './editor/FormComponents';
 import { COMMANDS, EVENTS } from './events';
 import { createTranslator, registerMessages } from './i18n';
 import type { FormsLabels } from './i18n/types';
-import { fieldId, normalizeForm, type FormDef, type FormField, type ProblemCode } from './schema';
+import { fieldId, fieldTitle, normalizeForm, type FormDef, type FormField, type ProblemCode } from './schema';
 import { IndexedDbFormStore } from './store/IndexedDbFormStore';
 import { RestFormStore, submitUrlOf } from './store/RestFormStore';
 import { ConflictError, type FormStore, type FormWrite } from './store/types';
@@ -109,6 +109,7 @@ function formsPlugin(editor: Editor, userOpts: FormsOptions = {}): void {
     buildOptions: (form) => ({ action: actionOf(form), ctx: { page }, texts: texts(), codes: codes(), pageId: pageId() }),
     labels: { chooseForm: () => t('chooseForm'), editForm: () => t('editForm'), noForm: () => t('noForm'), missingForm: () => t('missingForm') },
     editCommand: COMMANDS.edit,
+    settings: (target) => settingsOf(target),
     onCreate: (c) =>
       void create()
         .then((f) => {
@@ -307,8 +308,8 @@ function formsPlugin(editor: Editor, userOpts: FormsOptions = {}): void {
     return { css, links };
   };
 
-  const makeUi = (): FormEditor =>
-    new FormEditor({
+  const makeUi = (): FormEditor => new FormEditor(deps());
+  const deps = (): ConstructorParameters<typeof FormEditor>[0] => ({
       t,
       forms: () => forms,
       form: byId,
@@ -330,7 +331,65 @@ function formsPlugin(editor: Editor, userOpts: FormsOptions = {}): void {
       applyJson,
       exportSurveyJs: (id) => toSurveyJs(byId(id) || normalizeForm({ id })),
       onError,
-    });
+  });
+
+  /*
+   * Component settings: the selected part's field (label, name, required,
+   * options…), on the form its settings. A rebuild after the save replaces
+   * the selected part: the input being typed in gets the focus back.
+   */
+  let lastFocus: { key: string; prop: string; start: number | null; end: number | null; at: number } | null = null;
+  const settingsOf = (target: { form: Component; formId: string; index: number | null }): HTMLElement => {
+    if (opts.injectCss) injectCss();
+    const f = byId(target.formId);
+    if (!f) return h('div', { class: 'gjsf gjsf-trait' }, h('p', { class: 'gjsf-hint' }, target.formId ? t('missingForm') : t('noForm')));
+    const field = target.index != null && target.index < f.fields.length ? f.fields[target.index] : null;
+    const key = `${f.id}|${field?.id || ''}`;
+    const ui = new FormEditor(deps());
+    const body = ui.embed(f.id, field?.id || null);
+    const el = h(
+      'div',
+      { class: 'gjsf gjsf-trait' },
+      h(
+        'div',
+        { class: 'gjsf-trait__head' },
+        h('span', { class: 'gjsf-trait__title' }, field ? fieldTitle(field) : `${t('settings')}: ${f.name}`),
+        h('button', { type: 'button', class: 'gjsf-btn', onclick: () => openEditor(f.id) }, t('editForm'))
+      ),
+      body
+    );
+    const remember = (e: Event): void => {
+      const x = e.target as HTMLInputElement;
+      const prop = x?.closest?.('[data-prop]')?.getAttribute('data-prop') || x?.getAttribute?.('data-prop');
+      if (!prop) return;
+      let start: number | null = null;
+      let end: number | null = null;
+      try {
+        start = x.selectionStart;
+        end = x.selectionEnd;
+      } catch {
+        /* not a text input */
+      }
+      lastFocus = { key, prop, start, end, at: Date.now() };
+    };
+    el.addEventListener('input', remember);
+    el.addEventListener('keyup', remember);
+    el.addEventListener('focusin', remember);
+    const lf = lastFocus;
+    if (lf && lf.key === key && Date.now() - lf.at < 5000) {
+      setTimeout(() => {
+        const x = el.querySelector<HTMLInputElement>(`[data-prop="${lf.prop}"]`);
+        if (!x || !el.isConnected) return;
+        x.focus();
+        try {
+          if (lf.start != null) x.setSelectionRange(lf.start, lf.end ?? lf.start);
+        } catch {
+          /* not a text input */
+        }
+      });
+    }
+    return el;
+  };
 
   const openEditor = (id?: string | null): void => {
     if (disposed) return;
@@ -505,7 +564,7 @@ function formsPlugin(editor: Editor, userOpts: FormsOptions = {}): void {
 
 export const PLUGIN_ID = 'grapesjs-forms';
 /** Version of this package (a test checks it against package.json). */
-export const VERSION = '0.1.1';
+export const VERSION = '0.2.0';
 
 /** Options for forms (plugin contract). `autosaveDelay` and `submitUrl` apply live. */
 export const META: PluginMeta = {

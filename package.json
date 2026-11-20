@@ -1,6 +1,6 @@
 {
   "name": "grapesjs-forms",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "GrapesJS plugin: a form editor of its own (field types, options, placeholders, attributes, hidden fields with values). A form becomes a component styled by the site's own CSS; submissions go to a REST API (openapi.yaml), IndexedDB or memory. SurveyJS JSON import/export.",
   "type": "module",
   "main": "./dist/grapesjs-forms.umd.cjs",
