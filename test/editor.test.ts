@@ -80,6 +80,49 @@ describe('the plugin in GrapesJS', () => {
     expect(um.getStack().length).toBe(before);
   });
 
+  it('parts are layers with stable ids: styles given in GrapesJS survive a rebuild', async () => {
+    const s = await createEditor();
+    editor = s.editor;
+    const f = await s.api.create();
+    const c = addForm(editor, f.id);
+    await tick(5);
+    const find = (part: string, field?: string): Component => {
+      let hit: Component | undefined;
+      const walk = (x: Component, inField?: string): void => {
+        const fl = x.getAttributes()['data-gjsf-field'] || inField;
+        if (!hit && x.getAttributes()['data-gjsf-part'] === part && (!field || fl === field)) hit = x;
+        x.components().forEach((k: Component) => walk(k, fl));
+      };
+      walk(c);
+      return hit!;
+    };
+    const label = find('label', 'email');
+    const submit = find('submit');
+    expect(label.get('layerable')).toBe(true);
+    expect(label.get('selectable')).toBe(true);
+    expect(label.get('stylable')).toBe(true);
+    const lid = label.getId();
+    const sid = submit.getId();
+    expect(lid).toMatch(/-email-label$/);
+    expect(sid).toMatch(/-form-submit$/);
+    editor.select(label);
+    label.setStyle({ color: 'crimson' });
+    submit.setStyle({ 'background-color': 'navy' });
+    await s.api.update(f.id, { settings: { submitLabel: 'Go' } });
+    expect(find('label', 'email').getId()).toBe(lid);
+    expect(editor.getSelected()?.getId()).toBe(lid);
+    expect(find('submit').getId()).toBe(sid);
+    const css = editor.getCss()!;
+    expect(css).toContain(`#${lid}{color:crimson;}`);
+    expect(css).toContain(`#${sid}{background-color:navy;}`);
+    const html = editor.getHtml();
+    expect(html).toContain(`id="${lid}"`);
+    expect(html).toContain('>Go</button>');
+    // Ids are unique inside the form.
+    const ids = [...html.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
   it('switching the form in the trait rebuilds; a deleted form leaves a marked copy', async () => {
     const s = await createEditor();
     editor = s.editor;

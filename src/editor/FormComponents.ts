@@ -24,6 +24,32 @@ const LOCKED = {
 /** Attributes of the `<form>` the plugin writes (removed before each rebuild; the user's own stay). */
 const OWN_ATTRS = ['action', 'method', 'enctype', 'data-gjsf-success', 'data-gjsf-error', 'data-gjsf-redirect', 'data-gjsf-reset', 'data-gjsf-version', 'data-gjsf-codes', 'data-gjsf-page', 'data-gjsf-missing'];
 
+/**
+ * Gives every built element without an id a stable one, made from the
+ * component's key, the field it belongs to and its part
+ * (`gjsf-k3x9a-email-label`, `gjsf-k3x9a-form-submit`): a rebuild (the form
+ * was edited, another page opened) makes the same ids, so styles given to
+ * the parts in GrapesJS (`#…` rules) stay with them.
+ */
+export function stableIds(els: Array<El | string>, key: string): Array<El | string> {
+  const safe = (s: string) => s.replace(/[^\w-]/g, '_');
+  const seen = new Map<string, number>();
+  const walk = (el: El | string, scope: string): void => {
+    if (typeof el === 'string') return;
+    const field = el.attrs?.['data-gjsf-field'];
+    const sc = field ? safe(field) : scope;
+    if (!el.attrs?.id) {
+      const base = `gjsf-${key}-${sc}-${safe(el.part)}`;
+      const n = seen.get(base) || 0;
+      seen.set(base, n + 1);
+      el.attrs = { ...(el.attrs || {}), id: n ? `${base}-${n}` : base };
+    }
+    (el.kids || []).forEach((k) => walk(k, sc));
+  };
+  els.forEach((el) => walk(el, 'form'));
+  return els;
+}
+
 /** A built element as a GrapesJS component definition. */
 export function toComponent(el: El | string): Record<string, unknown> {
   if (typeof el === 'string') return { type: 'textnode', content: el };
@@ -250,13 +276,31 @@ export class FormComponents {
         .split(/\s+/)
         .filter(Boolean)
         .forEach((cls) => c.addClass(cls));
-      c.components().reset();
-      c.components().add(buildChildren(form, { ...o, key: c.get('gjsfKey') || randomKey() }).map(toComponent) as any);
+      const sel = this.editor.getSelected();
+      const selId = sel && sel !== c && sel.closest?.(`[${FORM_ATTR}]`) === c ? sel.getId() : '';
+      const key = c.get('gjsfKey') || randomKey();
+      // One reset with the new parts: GrapesJS keeps the `#id` rules of ids that stay.
+      c.components().reset(stableIds(buildChildren(form, { ...o, key }), String(key).replace(/[^\w-]/g, '')).map(toComponent) as any);
       this.ensureCss();
+      if (selId) {
+        const again = this.find(c, (x) => x.getId() === selId);
+        if (again) this.editor.select(again);
+      }
     };
     const um = this.editor.UndoManager as any;
     if (um?.skip) um.skip(run);
     else run();
+  }
+
+  private find(root: Component, test: (c: Component) => boolean): Component | undefined {
+    let hit: Component | undefined;
+    const walk = (x: Component): void => {
+      if (hit) return;
+      if (test(x)) hit = x;
+      else x.components().forEach(walk);
+    };
+    root.components().forEach(walk);
+    return hit;
   }
 
   /** Rebuilds the components of one form (all when no id); `stale` — only those built from another version or for another page. */

@@ -48,6 +48,9 @@ Or with `<script>`: `grapesjs-forms.umd.js` registers itself as `grapesjs-forms`
 2. **Blocks → Forms**: one block per form, and *New form* (creates one and opens the editor).
    A form component has a *Form* trait (switch the form) and *Edit the form*; double-click opens the editor too.
 3. Inside, the parts are made by the plugin: they can be selected and **styled**, not moved or deleted.
+   Every part is its own layer (field → label, input, help, error; options; the button), and each has
+   a stable id made from the form component, the field and the part (`gjsf-k3x9a-email-label`), so
+   styles given to one part in GrapesJS (`#…` rules) stay with it when the form is edited or rebuilt.
    When the form changes, every component of it in the open project is rebuilt (not on the undo stack);
    the classes and attributes you added to the `<form>` stay. A project opened later with an older copy
    is brought up to date. A deleted form leaves its copy, marked.

@@ -505,7 +505,7 @@ function formsPlugin(editor: Editor, userOpts: FormsOptions = {}): void {
 
 export const PLUGIN_ID = 'grapesjs-forms';
 /** Version of this package (a test checks it against package.json). */
-export const VERSION = '0.1.0';
+export const VERSION = '0.1.1';
 
 /** Options for forms (plugin contract). `autosaveDelay` and `submitUrl` apply live. */
 export const META: PluginMeta = {
