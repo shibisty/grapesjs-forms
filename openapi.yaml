@@ -1,0 +1,240 @@
+openapi: 3.0.3
+info:
+  title: grapesjs-forms backend
+  version: 1.0.0
+  description: |
+    What `RestFormStore` (plugin option `rest: { url }`) calls, and where the
+    published site posts. Paths are relative to the base URL.
+
+    - **Admin** (the editor): forms and their submissions. Protect them the way
+      the rest of your admin is protected (cookie session + `credentials`, or a
+      token through the `headers` option).
+    - **Public** (the site): `POST /forms/{id}/submissions`. The site posts to
+      `<submitUrl>/forms/<id>/submissions` (`submitUrl` defaults to `rest.url`;
+      a form's own `settings.endpoint` wins). Allow CORS for the site's origin
+      when it is not the API's.
+
+    Versions are opaque: `PUT` with `If-Match: "<version>"` answers 412 when
+    the form moved on. Errors are `{ error, errors? }`; `errors` maps a field
+    name to a list of codes or messages (the site shows them under the field;
+    known codes are turned into the form's texts).
+
+    Validate a submission against its form with `validateSubmission(form, data)`
+    (exported by the package, no DOM needed) or the same rules in your language
+    (see `src/schema.ts`). A filled honeypot field `_gjsf_hp` is a bot: answer
+    201 and keep nothing.
+servers:
+  - url: /api/forms
+paths:
+  /forms:
+    get:
+      summary: All forms (admin)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Form' } }
+  /forms/{id}:
+    parameters:
+      - $ref: '#/components/parameters/id'
+    get:
+      summary: One form (admin)
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { $ref: '#/components/schemas/Form' } } } }
+        '404': { $ref: '#/components/responses/Error' }
+    put:
+      summary: Creates or replaces a form (admin)
+      parameters:
+        - in: header
+          name: If-Match
+          required: false
+          schema: { type: string }
+          description: '"<version>" the client last saw; absent on create.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FormWrite' }
+      responses:
+        '200': { description: Replaced, content: { application/json: { schema: { $ref: '#/components/schemas/Form' } } } }
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Form' } } } }
+        '412': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Invalid' }
+    delete:
+      summary: Deletes a form and its submissions (admin)
+      responses:
+        '204': { description: Deleted }
+        '404': { $ref: '#/components/responses/Error' }
+  /forms/{id}/submissions:
+    parameters:
+      - $ref: '#/components/parameters/id'
+    post:
+      summary: Sends a submission (public — the site)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [data]
+              properties:
+                data: { $ref: '#/components/schemas/SubmissionData' }
+                meta: { $ref: '#/components/schemas/SubmissionMeta' }
+          multipart/form-data:
+            schema:
+              type: object
+              description: With file fields. Values by field name (repeated names — several values); `_meta` is the JSON of `meta`.
+              additionalProperties: true
+              properties:
+                _meta: { type: string }
+      responses:
+        '201':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  created_at: { type: string, format: date-time }
+                  message: { type: string, description: Shown instead of the form's success message. }
+                  redirect: { type: string, description: Opened instead of the form's redirect. }
+        '404': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Invalid' }
+        '429': { $ref: '#/components/responses/Error' }
+    get:
+      summary: Submissions of a form, newest first (admin)
+      parameters:
+        - { in: query, name: limit, schema: { type: integer, default: 50, maximum: 200 } }
+        - { in: query, name: offset, schema: { type: integer, default: 0 } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Submission' } }
+                  total: { type: integer }
+  /forms/{id}/submissions/{sid}:
+    parameters:
+      - $ref: '#/components/parameters/id'
+      - { in: path, name: sid, required: true, schema: { type: string } }
+    delete:
+      summary: Deletes a submission (admin)
+      responses:
+        '204': { description: Deleted }
+components:
+  parameters:
+    id:
+      in: path
+      name: id
+      required: true
+      schema: { type: string }
+      description: Form id (a UUID made by the editor).
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Invalid:
+      description: Validation failed
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+          example:
+            error: The given data was invalid.
+            errors: { email: [email], agree: [required] }
+  schemas:
+    Error:
+      type: object
+      properties:
+        error: { type: string }
+        errors:
+          type: object
+          additionalProperties: { type: array, items: { type: string } }
+          description: 'By field: codes (required, email, url, number, min, max, minLength, maxLength, pattern, option, date, time, color) or ready messages.'
+    FormWrite:
+      type: object
+      required: [name, fields]
+      properties:
+        name: { type: string }
+        fields: { type: array, items: { $ref: '#/components/schemas/Field' } }
+        settings: { $ref: '#/components/schemas/Settings' }
+        attrs: { type: object, additionalProperties: { type: string }, description: Extra attributes of the <form>. }
+    Form:
+      allOf:
+        - $ref: '#/components/schemas/FormWrite'
+        - type: object
+          properties:
+            id: { type: string }
+            version: { oneOf: [{ type: string }, { type: integer }] }
+            updated_at: { type: string, format: date-time }
+    Field:
+      type: object
+      description: The JSON of the editor, kept as it is (camelCase inside).
+      required: [id, type, name]
+      properties:
+        id: { type: string }
+        type:
+          type: string
+          enum: [text, email, tel, url, number, password, textarea, select, radio, checkbox, checkboxes, date, time, datetime, range, color, file, hidden, heading, paragraph]
+        name: { type: string, description: 'Key in a submission ("" for heading / paragraph).' }
+        label: { type: string }
+        placeholder: { type: string }
+        help: { type: string }
+        required: { type: boolean }
+        value: { type: string, description: 'Default value; for hidden — the value sent. May hold {{placeholders}}.' }
+        options:
+          type: array
+          items: { type: object, properties: { label: { type: string }, value: { type: string } } }
+        multiple: { type: boolean }
+        min: { type: string }
+        max: { type: string }
+        step: { type: string }
+        minLength: { type: integer }
+        maxLength: { type: integer }
+        pattern: { type: string }
+        accept: { type: string }
+        autocomplete: { type: string }
+        rows: { type: integer }
+        readonly: { type: boolean }
+        disabled: { type: boolean }
+        width: { type: string, enum: [full, 1/2, 1/3, 2/3, 1/4, 3/4] }
+        attrs: { type: object, additionalProperties: { type: string } }
+        text: { type: string }
+    Settings:
+      type: object
+      properties:
+        endpoint: { type: string }
+        successMessage: { type: string }
+        errorMessage: { type: string }
+        redirect: { type: string }
+        reset: { type: boolean, default: true }
+        honeypot: { type: boolean, default: true }
+        submitLabel: { type: string }
+    SubmissionData:
+      type: object
+      additionalProperties: true
+      description: 'By field name: strings; checkboxes / multiple select — arrays; a single checkbox — boolean; plus `_gjsf_hp` (the honeypot, empty for people).'
+    SubmissionMeta:
+      type: object
+      properties:
+        url: { type: string }
+        referrer: { type: string }
+        lang: { type: string }
+        page_id: { type: string, description: grapesjs-pages record of the page. }
+    Submission:
+      type: object
+      properties:
+        id: { type: string }
+        form_id: { type: string }
+        data: { $ref: '#/components/schemas/SubmissionData' }
+        meta: { $ref: '#/components/schemas/SubmissionMeta' }
+        created_at: { type: string, format: date-time }

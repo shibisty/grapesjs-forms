@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>grapesjs-forms — dev</title>
+    <link rel="stylesheet" href="/node_modules/grapesjs/dist/css/grapes.min.css" />
+    <style>
+      body { margin: 0; }
+    </style>
+  </head>
+  <body>
+    <div id="gjs"></div>
+    <script type="module">
+      import grapesjs from 'grapesjs';
+      import forms from '/src/index.ts';
+      window.editor = grapesjs.init({
+        container: '#gjs',
+        height: '100vh',
+        storageManager: false,
+        components: '<h1>Contact us</h1><p>Drop a form from the Blocks (Forms).</p>',
+        style: 'body{font-family:Georgia,serif;color:#223;padding:24px} button{background:#3b5bdb;color:#fff;border:0;border-radius:6px}',
+        plugins: [forms],
+        pluginsOpts: { [forms.meta.id]: { /* rest: { url: '/api/forms' } */ } },
+      });
+    </script>
+  </body>
+</html>
